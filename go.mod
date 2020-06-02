@@ -1,4 +1,4 @@
-module zusux
+module go-mysql-db
 
 go 1.13
 
