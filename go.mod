@@ -1,4 +1,4 @@
-module go-mysql-db
+module github.com/zusux/go-mysql-db
 
 go 1.13
 
