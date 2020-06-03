@@ -8,7 +8,48 @@ import (
 	"reflect"
 	"strings"
 )
-type ConfigStruct struct {
+
+var (
+	connections *connectionStruct
+	tmpSql *sqlTmp
+)
+
+func Connect(hostname string,port int,database string,username string, password string ,prefex string,charset string,maxOpenConns int,maxIdleConns int)  {
+	_config := &configStruct{
+		dbtype:"mysql",
+		hostname:hostname,
+		port:port,
+		database: database,
+		username:username,
+		password:password,
+		dsn:"",
+		charset:charset,
+		prefex:prefex,
+		debug:true,
+	}
+	connections = &connectionStruct{
+		Config:_config,
+	}
+	//连接数据库
+	connections.Connection()
+	connections.SqlDb.SetMaxOpenConns(maxOpenConns) //设置最大打开
+	connections.SqlDb.SetMaxIdleConns(maxIdleConns) //设置最大闲置连接
+
+	//模板sql
+	tmpSql = &sqlTmp{
+		SelectSql:"SELECT %DISTINCT%%FIELD% FROM %TABLE%%FORCE%%JOIN%%WHERE%%GROUP%%HAVING%%UNION%%ORDER%%LIMIT%%LOCK%",
+		InsertSql:"INSERT INTO %TABLE% (%FIELD%) VALUES (%DATA%)",
+		UpdateSql:"UPDATE %TABLE% SET %SET% %JOIN%%WHERE%%ORDER%%LIMIT%",
+		DeleteSql:"DELETE FROM %TABLE%  %JOIN%%WHERE%%ORDER%%LIMIT%",
+		MaxSql:"SELECT MAX(%FIELD%) as zusux_max FROM %TABLE% %WHERE%",
+		MinSql:"SELECT MIN(%FIELD%) as zusux_min FROM %TABLE% %WHERE%",
+		CountSql:"SELECT COUNT(*) as zusux_count FROM %TABLE% %WHERE%",
+		AvgSql:"SELECT AVG(%FIELD%) as zusux_avg FROM %TABLE% %WHERE%",
+		SumSql:"SELECT SUM(%FIELD%) as zusux_sum FROM %TABLE% %WHERE%",
+	}
+}
+
+type configStruct struct {
 	dbtype string
 	hostname string
 	port int
@@ -21,20 +62,20 @@ type ConfigStruct struct {
 	debug bool
 }
 
-type ConnectionStruct struct {
-	Config *ConfigStruct
+type connectionStruct struct {
+	Config *configStruct
 	SqlDb *sql.DB
 	err error
 }
 
-func ( c  *ConnectionStruct) Connection ()  {
+func ( c  *connectionStruct) Connection ()  {
 	dns := c.parseDsn()
 	c.SqlDb ,c.err = sql.Open(c.Config.dbtype,dns)
 	if c.err != nil{
 		panic(c.err.Error())
 	}
 }
-func (c *ConnectionStruct) parseDsn () string {
+func (c *connectionStruct) parseDsn () string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s",
 		c.Config.username,
 		c.Config.password,
@@ -47,8 +88,8 @@ func (c *ConnectionStruct) parseDsn () string {
 	return dsn
 }
 
-type Db struct {
-	Conn *ConnectionStruct
+type zdb struct {
+	Conn *connectionStruct
 	Tmp *sqlTmp
 	Build *sqlBuild
 }
@@ -115,38 +156,10 @@ func (b *sqlBuild) Reset(){
 }
 
 
-func NewDb(hostname string,port int,database string,username string,password string,prefex string) *Db{
-
-	_config := &ConfigStruct{
-		dbtype:"mysql",
-		hostname:hostname,
-		port:port,
-		database: database,
-		username:username,
-		password:password,
-		dsn:"",
-		charset:"utf8mb4",
-		prefex:prefex,
-		debug:true,
-	}
-
-	_conn := &ConnectionStruct{
-		Config:_config,
-	}
-
-	return &Db{
-		Conn:_conn,
-		Tmp:&sqlTmp{
-			SelectSql:"SELECT %DISTINCT%%FIELD% FROM %TABLE%%FORCE%%JOIN%%WHERE%%GROUP%%HAVING%%UNION%%ORDER%%LIMIT%%LOCK%",
-			InsertSql:"INSERT INTO %TABLE% (%FIELD%) VALUES (%DATA%)",
-			UpdateSql:"UPDATE %TABLE% SET %SET% %JOIN%%WHERE%%ORDER%%LIMIT%",
-			DeleteSql:"DELETE FROM %TABLE%  %JOIN%%WHERE%%ORDER%%LIMIT%",
-			MaxSql:"SELECT MAX(%FIELD%) as zusux_max FROM %TABLE% %WHERE%",
-			MinSql:"SELECT MIN(%FIELD%) as zusux_min FROM %TABLE% %WHERE%",
-			CountSql:"SELECT COUNT(*) as zusux_count FROM %TABLE% %WHERE%",
-			AvgSql:"SELECT AVG(%FIELD%) as zusux_avg FROM %TABLE% %WHERE%",
-			SumSql:"SELECT SUM(%FIELD%) as zusux_sum FROM %TABLE% %WHERE%",
-		},
+func NewDb() *zdb{
+	return &zdb{
+		Conn:connections,
+		Tmp:tmpSql,
 		Build: &sqlBuild{
 			Table_ : "",
 			Alias_ : "",
@@ -174,17 +187,17 @@ func NewDb(hostname string,port int,database string,username string,password str
 	}
 }
 
-func (db *Db) Table (table string) *Db  {
+func (db *zdb) Table (table string) *zdb  {
 	db.Build.Table_ = table
 	return db
 }
 
-func (db *Db) Alias (alias string) *Db  {
+func (db *zdb) Alias (alias string) *zdb  {
 	db.Build.Alias_ = " "+alias
 	return db
 }
 
-func (db *Db) Distinct (distinct bool) *Db  {
+func (db *zdb) Distinct (distinct bool) *zdb  {
 	if distinct {
 		db.Build.Distinct_ = "DISTINCT "
 	}else{
@@ -196,7 +209,7 @@ func (db *Db) Distinct (distinct bool) *Db  {
 
 
 
-func (db *Db) Field (fields []string) *Db {
+func (db *zdb) Field (fields []string) *zdb {
 	if len(fields) > 0{
 		db.Build.Field_ = strings.Join(fields,",")
 	}else{
@@ -205,7 +218,7 @@ func (db *Db) Field (fields []string) *Db {
 	return db
 }
 
-func (db *Db) Order (field string,order string) *Db  {
+func (db *zdb) Order (field string,order string) *zdb  {
 	o := []string{}
 	o = append(o,field)
 	o = append(o,order)
@@ -213,37 +226,37 @@ func (db *Db) Order (field string,order string) *Db  {
 	return db
 }
 
-func (db *Db) Debug(debug bool) *Db{
+func (db *zdb) Debug(debug bool) *zdb{
   db.Build.Debug_ = debug
   return db
 }
 
-func (db *Db) Group (field string) *Db {
+func (db *zdb) Group (field string) *zdb {
 	db.Build.Group_ = append(db.Build.Group_,field)
 	return db
 }
 
-func (db *Db) Comment (comment string) *Db  {
+func (db *zdb) Comment (comment string) *zdb  {
 	db.Build.Comment_ = comment
 	return db
 }
 
-func (db *Db) Join(table string, condition string, jointype string) *Db  {
+func (db *zdb) Join(table string, condition string, jointype string) *zdb  {
 	db.Build.Join_ = append(db.Build.Join_, fmt.Sprintf("%s JOIN %s ON %s",strings.ToUpper(jointype),table,condition))
 	return db
 }
 
-func (db *Db) Lock(isLock bool) *Db {
+func (db *zdb) Lock(isLock bool) *zdb {
 	db.Build.Lock_ = isLock
 	return db
 }
 
-func (db *Db) Force(index string) *Db  {
+func (db *zdb) Force(index string) *zdb  {
 	db.Build.Force_ = index
 	return db
 }
 
-func (db *Db) Where(field string,condition string,option interface{}) *Db  {
+func (db *zdb) Where(field string,condition string,option interface{}) *zdb  {
 	getType := reflect.TypeOf(option)
 	//getValue := reflect.ValueOf(option)
 	k := getType.Kind()
@@ -265,7 +278,7 @@ func (db *Db) Where(field string,condition string,option interface{}) *Db  {
 	}
 	return db
 }
-func (db *Db) WhereCond(cond bool) *Db{
+func (db *zdb) WhereCond(cond bool) *zdb{
 	if cond {
 		db.Build.WhereCond_ = "AND"
 	}else{
@@ -273,7 +286,7 @@ func (db *Db) WhereCond(cond bool) *Db{
 	}
 	return db
 }
-func (db *Db) WhereOr(field string,condition string,option interface{}) *Db  {
+func (db *zdb) WhereOr(field string,condition string,option interface{}) *zdb  {
 	getType := reflect.TypeOf(option)
 	//getValue := reflect.ValueOf(option)
 	k := getType.Kind()
@@ -296,7 +309,7 @@ func (db *Db) WhereOr(field string,condition string,option interface{}) *Db  {
 }
 
 
-func (db *Db) Having(field string,condition string,option interface{}) *Db  {
+func (db *zdb) Having(field string,condition string,option interface{}) *zdb  {
 	getType := reflect.TypeOf(option)
 	//getValue := reflect.ValueOf(option)
 	k := getType.Kind()
@@ -318,7 +331,7 @@ func (db *Db) Having(field string,condition string,option interface{}) *Db  {
 	}
 	return db
 }
-func (db *Db) HavingCond(cond bool) *Db{
+func (db *zdb) HavingCond(cond bool) *zdb{
 	if cond {
 		db.Build.HavingCond_ = "AND"
 	}else{
@@ -326,7 +339,7 @@ func (db *Db) HavingCond(cond bool) *Db{
 	}
 	return db
 }
-func (db *Db) HavingOr(field string,condition string,option interface{}) *Db  {
+func (db *zdb) HavingOr(field string,condition string,option interface{}) *zdb  {
 	getType := reflect.TypeOf(option)
 	//getValue := reflect.ValueOf(option)
 	k := getType.Kind()
@@ -348,7 +361,7 @@ func (db *Db) HavingOr(field string,condition string,option interface{}) *Db  {
 	return db
 }
 
-func (db *Db) Union(sql string,isAll bool) *Db  {
+func (db *zdb) Union(sql string,isAll bool) *zdb  {
 
 	var UnionType string
 	if isAll{
@@ -361,7 +374,7 @@ func (db *Db) Union(sql string,isAll bool) *Db  {
 }
 
 
-func (db *Db) Limit(offset int64, rows int64) *Db  {
+func (db *zdb) Limit(offset int64, rows int64) *zdb  {
 	if offset > 0{
 		db.Build.Offset_ = offset
 	}
@@ -371,7 +384,7 @@ func (db *Db) Limit(offset int64, rows int64) *Db  {
 	return db
 }
 //执行插入语句
-func (db *Db) Insert (data map[string]interface{},replace bool) (int64,error) {
+func (db *zdb) Insert (data map[string]interface{},replace bool) (int64,error) {
 	sqlStr, binds := db.BuildInsertSql(data,replace)
 	if db.Build.Debug_ {
 		db.showDebug(sqlStr,binds)
@@ -392,7 +405,7 @@ func (db *Db) Insert (data map[string]interface{},replace bool) (int64,error) {
 	return id,nil
 }
 //构建插入语句
-func (db *Db) BuildInsertSql(data map[string]interface{}, replace bool) (sql string, values []interface{}) {
+func (db *zdb) BuildInsertSql(data map[string]interface{}, replace bool) (sql string, values []interface{}) {
 	keys,holders,values  := db.array_keys_values(data)
 
 	var typeWords string
@@ -412,7 +425,7 @@ func (db *Db) BuildInsertSql(data map[string]interface{}, replace bool) (sql str
 	return
 }
 
-func (db *Db) array_keys_values (data map[string]interface{}) ([]string, []string, []interface{}) {
+func (db *zdb) array_keys_values (data map[string]interface{}) ([]string, []string, []interface{}) {
 	keys := make([]string, 0, len(data))
 	holders := make([]string,0,len(data))
 	values := make([]interface{}, 0, len(data))
@@ -424,14 +437,12 @@ func (db *Db) array_keys_values (data map[string]interface{}) ([]string, []strin
 	return keys,holders,values
 }
 
-func (db *Db) showDebug(sql string, bings []interface{}){
-	fmt.Printf("[sql] %s", sql)
-	fmt.Println("")
-	fmt.Printf("[binds] %v", bings)
+func (db *zdb) showDebug(sql string, bings []interface{}){
+	fmt.Println("[sql]"+sql+"  [binds]"+fmt.Sprintf("%v",bings))
 }
 
 //执行查询语句
-func (db *Db) Query(sqlStr string,binds []interface{}) (*[]map[string]string,error) {
+func (db *zdb) Query(sqlStr string,binds []interface{}) (*[]map[string]string,error) {
 	ret := make([]map[string]string,0)
 	if db.Build.Debug_ {
 		db.showDebug(sqlStr,binds)
@@ -442,6 +453,7 @@ func (db *Db) Query(sqlStr string,binds []interface{}) (*[]map[string]string,err
 		return &ret,err
 	}
 	rows, err := stmt.Query(binds...)
+
 	if err != nil{
 		return  &ret,err
 	}
@@ -475,7 +487,7 @@ func (db *Db) Query(sqlStr string,binds []interface{}) (*[]map[string]string,err
 }
 
 //执行查询语句
-func (db *Db) Select() (*[]map[string]string,error) {
+func (db *zdb) Select() (*[]map[string]string,error) {
 	ret := make([]map[string]string,0)
 	sqlStr, binds := db.BuildSelectSql()
 	if db.Build.Debug_ {
@@ -521,7 +533,7 @@ func (db *Db) Select() (*[]map[string]string,error) {
 
 
 //执行查询find语句
-func (db *Db) Find() (*map[string]string,error) {
+func (db *zdb) Find() (*map[string]string,error) {
 	ret := map[string]string{}
 	sqlStr, binds := db.Limit(0,1).BuildSelectSql()
 	if db.Build.Debug_ {
@@ -568,7 +580,7 @@ func (db *Db) Find() (*map[string]string,error) {
 }
 
 //执行查询Value语句
-func (db *Db) Value(field string) (string,error) {
+func (db *zdb) Value(field string) (string,error) {
 	var ret string
 	sqlStr, binds := db.Limit(0,1).BuildSelectSql()
 	if db.Build.Debug_ {
@@ -616,7 +628,7 @@ func (db *Db) Value(field string) (string,error) {
 
 
 //执行查询count语句
-func (db *Db) Count() (int64,error) {
+func (db *zdb) Count() (int64,error) {
 	var zusuxCount int64
 	sqlStr, binds := db.BuildCountSql()
 	if db.Build.Debug_ {
@@ -635,7 +647,7 @@ func (db *Db) Count() (int64,error) {
 }
 
 //执行查询max语句
-func (db *Db) Max(field string) (float64,error) {
+func (db *zdb) Max(field string) (float64,error) {
 	var zusuxMax float64
 	sqlStr, binds := db.Field([]string{field}).BuildMaxSql()
 	if db.Build.Debug_ {
@@ -654,7 +666,7 @@ func (db *Db) Max(field string) (float64,error) {
 }
 
 //执行查询min语句
-func (db *Db) Min(field string) (float64,error) {
+func (db *zdb) Min(field string) (float64,error) {
 	var zusuxMin float64
 	sqlStr, binds := db.Field([]string{field}).BuildMinSql()
 	if db.Build.Debug_ {
@@ -674,7 +686,7 @@ func (db *Db) Min(field string) (float64,error) {
 
 
 //执行查询sum语句
-func (db *Db) Sum(field string) (float64,error) {
+func (db *zdb) Sum(field string) (float64,error) {
 	var zusuxSum float64
 	sqlStr, binds := db.Field([]string{field}).BuildSumSql()
 	if db.Build.Debug_ {
@@ -693,7 +705,7 @@ func (db *Db) Sum(field string) (float64,error) {
 }
 
 //执行查询sum语句
-func (db *Db) Avg(field string) (float64,error) {
+func (db *zdb) Avg(field string) (float64,error) {
 	var zusuxAvg float64
 	sqlStr, binds := db.Field([]string{field}).BuildAvgSql()
 	if db.Build.Debug_ {
@@ -712,7 +724,7 @@ func (db *Db) Avg(field string) (float64,error) {
 }
 
 
-func (db *Db) BuildSelectSql() (string,[]interface{})  {
+func (db *zdb) BuildSelectSql() (string,[]interface{})  {
 	var binds []interface{}
 	//force index
 	var forceStr string
@@ -863,7 +875,7 @@ func (db *Db) BuildSelectSql() (string,[]interface{})  {
 }
 
 //总数
-func (db *Db) BuildCountSql() (string,[]interface{})  {
+func (db *zdb) BuildCountSql() (string,[]interface{})  {
 	var binds []interface{}
 	// where and 语句  binds
 	whereArr := make([]string,0,len(db.Build.Where_))
@@ -919,7 +931,7 @@ func (db *Db) BuildCountSql() (string,[]interface{})  {
 }
 
 //最大值
-func (db *Db) BuildMaxSql() (string,[]interface{})  {
+func (db *zdb) BuildMaxSql() (string,[]interface{})  {
 	var binds []interface{}
 	// where and 语句  binds
 	whereArr := make([]string,0,len(db.Build.Where_))
@@ -975,7 +987,7 @@ func (db *Db) BuildMaxSql() (string,[]interface{})  {
 	return sql,binds
 }
 //最小值
-func (db *Db) BuildMinSql() (string,[]interface{})  {
+func (db *zdb) BuildMinSql() (string,[]interface{})  {
 	var binds []interface{}
 	// where and 语句  binds
 	whereArr := make([]string,0,len(db.Build.Where_))
@@ -1032,7 +1044,7 @@ func (db *Db) BuildMinSql() (string,[]interface{})  {
 }
 
 //求平均值
-func (db *Db) BuildAvgSql() (string,[]interface{})  {
+func (db *zdb) BuildAvgSql() (string,[]interface{})  {
 	var binds []interface{}
 	// where and 语句  binds
 	whereArr := make([]string,0,len(db.Build.Where_))
@@ -1089,7 +1101,7 @@ func (db *Db) BuildAvgSql() (string,[]interface{})  {
 }
 
 //求和
-func (db *Db) BuildSumSql() (string,[]interface{})  {
+func (db *zdb) BuildSumSql() (string,[]interface{})  {
 	var binds []interface{}
 	// where and 语句  binds
 	whereArr := make([]string,0,len(db.Build.Where_))
@@ -1146,7 +1158,7 @@ func (db *Db) BuildSumSql() (string,[]interface{})  {
 }
 
 //执行语句
-func (db *Db) Execute(sqlStr string,binds []interface{}) (int64,error) {
+func (db *zdb) Execute(sqlStr string,binds []interface{}) (int64,error) {
 	if db.Build.Debug_ {
 		db.showDebug(sqlStr,binds)
 	}
@@ -1164,7 +1176,7 @@ func (db *Db) Execute(sqlStr string,binds []interface{}) (int64,error) {
 }
 
 //执行更新语句
-func (db *Db) Update(data map[string]interface{}) (int64,error) {
+func (db *zdb) Update(data map[string]interface{}) (int64,error) {
 
 	sqlStr, binds := db.BuildUpdateSql(data)
 	if db.Build.Debug_ {
@@ -1184,7 +1196,7 @@ func (db *Db) Update(data map[string]interface{}) (int64,error) {
 	return  affectRows ,err
 }
 
-func (db *Db) BuildUpdateSql(data map[string]interface{}) (string,[]interface{})  {
+func (db *zdb) BuildUpdateSql(data map[string]interface{}) (string,[]interface{})  {
 	//fmt.Println(data)
 	var binds []interface{}
 	//set 语句
@@ -1286,7 +1298,7 @@ func (db *Db) BuildUpdateSql(data map[string]interface{}) (string,[]interface{})
 
 
 //执行删除语句
-func (db *Db) Delete() (int64,error) {
+func (db *zdb) Delete() (int64,error) {
 
 	sqlStr, binds := db.BuildDeleteSql()
 	if db.Build.Debug_ {
@@ -1306,7 +1318,7 @@ func (db *Db) Delete() (int64,error) {
 	return  affectRows ,err
 }
 // 构建删除语句
-func (db *Db) BuildDeleteSql() (string,[]interface{})  {
+func (db *zdb) BuildDeleteSql() (string,[]interface{})  {
 	//fmt.Println(data)
 	var binds []interface{}
 	// where and 语句
@@ -1382,8 +1394,7 @@ func (db *Db) BuildDeleteSql() (string,[]interface{})  {
 	return sql,binds
 }
 
-func (db *Db) GetDb() *sql.DB {
-
+func (db *zdb) GetDb() *sql.DB {
 	return db.Conn.SqlDb
 }
 
