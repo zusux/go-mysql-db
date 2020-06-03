@@ -1,9 +1,16 @@
 # go-mysql-db
 
+### 安装
+`
+go get github.com/zusux/go-mysql-db
+`
+
+### 使用
+`
 import(
  "github.com/zusux/go-mysql-db/Db"
 )
-
+`
 ### 连接数据库
 ```
   Db.Connect("127.0.0.1",3306,"zuusx","root","123456","","utf8mb4",100,10)
