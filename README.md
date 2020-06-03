@@ -18,10 +18,11 @@ import(
   
   
 ### 插入数据
-`
+
+ ```
  db := Db.NewDb()
  id, err := db.Table("user").Insert(map[string]interface{}{"username":"aaa","nickname":"sssd","password":"ddd"},false)
- `
+ ```
   
 ### 更新数据
 ```
