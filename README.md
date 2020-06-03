@@ -1,17 +1,32 @@
 # go-mysql-db
 
+### 安装
+`
+go get github.com/zusux/go-mysql-db
+`
+
+### 使用
+`
+import(
+ "github.com/zusux/go-mysql-db/Db"
+)
+`
 ### 连接数据库
 ```
-  db := Db.NewDb("127.0.0.1",3306,"zusux","root","123456","") 
-  db.Conn.Connection()
+  Db.Connect("127.0.0.1",3306,"zuusx","root","123456","","utf8mb4",100,10)
 ``` 
   
   
 ### 插入数据
-`id, err := db.Table("user").Insert(map[string]interface{}{"username":"aaa","nickname":"sssd","password":"ddd"},false)`
+
+ ```
+ db := Db.NewDb()
+ id, err := db.Table("user").Insert(map[string]interface{}{"username":"aaa","nickname":"sssd","password":"ddd"},false)
+ ```
   
 ### 更新数据
 ```
+  db := Db.NewDb()
   rows,err := db.Table("user").
 		Where("password","=","eee").
 		Where("username","in",[]interface{}{"889"}).
@@ -24,6 +39,7 @@
 ```
 ### 删除数据
 ``` 
+    db := Db.NewDb()
     rows,err := db.Table("user").
 		Where("password","=","eee").
 		Where("username","in",[]interface{}{"889"}).
@@ -38,6 +54,7 @@
  
 #### 查询多条记录
 ```
+	db := Db.NewDb()
 	all,err := db.Table("book").
 		Alias("b").
 		Distinct(true).
@@ -60,10 +77,17 @@
 ```   
 #### 查询一条记录
 `
-record,err := db.Table("book").Where("project_id","=","1").Where("book_name","=","工程").Order("sort","asc").Order("book_name","desc").Find() `
+	db := Db.NewDb()
+	record,err := db.Table("book").
+		Where("project_id","=","1").
+		Where("book_name","=","工程").
+		Order("sort","asc").
+		Order("book_name","desc").
+		Find() `
 		
 #### 查询单个字段
 ```
+  db := Db.NewDb()
   value,err := db.Table("book").
 		Where("project_id","=","1").
 		Where("book_name","=","工程").
@@ -75,25 +99,30 @@ record,err := db.Table("book").Where("project_id","=","1").Where("book_name","="
    
   #### Count
   ``` 
+  db := Db.NewDb()
   count,err :=db.Table("book").Where("project_id","=","1").Count() 
   ```
   
   #### Max
   ```
-  max,err :=db.Debug(true).Table("book").Where("project_id","=","1").Max("book_id")
+  	db := Db.NewDb()
+  	max,err :=db.Debug(true).Table("book").Where("project_id","=","1").Max("book_id")
   ```
   
   #### Min
   ```
-  min,err :=db.Debug(true).Table("book").Where("project_id","=","1").Min("book_id")
+  	db := Db.NewDb()
+  	min,err :=db.Debug(true).Table("book").Where("project_id","=","1").Min("book_id")
   ```
   
   #### Avg
   ```
-  avg,err :=db.Debug(true).Table("book").Where("project_id","=","1").Avg("number")
+  	db := Db.NewDb()
+  	avg,err :=db.Debug(true).Table("book").Where("project_id","=","1").Avg("number")
   ```
   
   #### Sum
  ```
- avg,err :=db.Debug(true).Table("book").Where("project_id","=","1").Sum("number")
+	db := Db.NewDb()
+ 	avg,err :=db.Debug(true).Table("book").Where("project_id","=","1").Sum("number")
  ```
