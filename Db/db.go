@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+/*
+ @Author 周旭鑫
+ @Email zhxx136@qq.com
+ @date 2020年6月4日 22:00
+ */
 var (
 	connections *connectionStruct
 	tmpSql *sqlTmp
@@ -47,6 +52,12 @@ func Connect(hostname string,port int,database string,username string, password 
 		AvgSql:"SELECT AVG(%FIELD%) as zusux_avg FROM %TABLE% %WHERE%",
 		SumSql:"SELECT SUM(%FIELD%) as zusux_sum FROM %TABLE% %WHERE%",
 	}
+}
+
+type Where struct {
+	Field string
+	Condition string
+	Value interface{}
 }
 
 type configStruct struct {
@@ -253,6 +264,29 @@ func (db *zdb) Lock(isLock bool) *zdb {
 
 func (db *zdb) Force(index string) *zdb  {
 	db.Build.Force_ = index
+	return db
+}
+
+func (db *zdb) Where_(where Where) *zdb  {
+	getType := reflect.TypeOf(where.Value)
+	//getValue := reflect.ValueOf(option)
+	k := getType.Kind()
+	switch k {
+	case reflect.String, reflect.Int,reflect.Int64 :
+		key := fmt.Sprintf("%s %s ?",where.Field,where.Condition)
+		db.Build.Where_[key] = where.Value
+	case reflect.Slice, reflect.Array:
+		arr := reflect.ValueOf(where.Value)
+		holders := make([]string,0,arr.Len())
+		values := make([]interface{}, 0, arr.Len())
+		for i := 0; i < arr.Len(); i++ {
+			holders = append(holders,"?")
+			s := fmt.Sprintf("%v",arr.Index(i))
+			values = append(values, s)
+		}
+		key := fmt.Sprintf("%s %s (%s)",where.Field,where.Condition,strings.Join(holders,","))
+		db.Build.Where_[key] = values
+	}
 	return db
 }
 
@@ -475,7 +509,7 @@ func (db *zdb) Query(sqlStr string,binds []interface{}) (*[]map[string]string,er
 		vmap := make(map[string]string,len(scanArgs))
 		for i,col := range values{
 			if col == nil{
-				value = "NULL"
+				value = ""
 			}else{
 				value = string(col)
 			}
@@ -520,7 +554,7 @@ func (db *zdb) Select() (*[]map[string]string,error) {
 		vmap := make(map[string]string,len(scanArgs))
 		for i,col := range values{
 			if col == nil{
-				value = "NULL"
+				value = ""
 			}else{
 				value = string(col)
 			}
@@ -566,7 +600,7 @@ func (db *zdb) Find() (*map[string]string,error) {
 		var value string
 		for i,col := range values{
 			if col == nil{
-				value = "NULL"
+				value = ""
 			}else{
 				value = string(col)
 			}
@@ -612,7 +646,7 @@ func (db *zdb) Value(field string) (string,error) {
 		var value string
 		for i,col := range values{
 			if col == nil{
-				value = "NULL"
+				value = ""
 			}else{
 				value = string(col)
 			}
