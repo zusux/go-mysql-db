@@ -29,8 +29,8 @@ func Connect(hostname string,port int,database string,username string, password 
 		password:password,
 		dsn:"",
 		charset:charset,
-		prefex:prefex,
-		debug:true,
+		Prefex:prefex,
+		Debug:true,
 	}
 	connections = &connectionStruct{
 		Config:_config,
@@ -69,8 +69,8 @@ type configStruct struct {
 	password string
 	dsn string
 	charset string
-	prefex string
-	debug bool
+	Prefex string
+	Debug bool
 }
 
 type connectionStruct struct {
@@ -196,6 +196,11 @@ func NewDb() *zdb{
 			Debug_ : false,
 		},
 	}
+}
+
+func (db *zdb) Name (name string) *zdb  {
+	db.Build.Table_ = db.Conn.Config.Prefex + name
+	return db
 }
 
 func (db *zdb) Table (table string) *zdb  {
