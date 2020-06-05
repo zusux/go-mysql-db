@@ -43,7 +43,8 @@ func Connect(hostname string,port int,database string,username string, password 
 	//模板sql
 	tmpSql = &sqlTmp{
 		SelectSql:"SELECT %DISTINCT%%FIELD% FROM %TABLE%%FORCE%%JOIN%%WHERE%%GROUP%%HAVING%%UNION%%ORDER%%LIMIT%%LOCK%",
-		InsertSql:"INSERT INTO %TABLE% (%FIELD%) VALUES (%DATA%)",
+		InsertSql:"%INSERT% INTO %TABLE% (%FIELD%) VALUES (%DATA%)",
+		InsertAllSql : "%INSERT% INTO %TABLE% (%FIELD%) VALUES %DATA%",
 		UpdateSql:"UPDATE %TABLE% SET %SET% %JOIN%%WHERE%%ORDER%%LIMIT%",
 		DeleteSql:"DELETE FROM %TABLE%  %JOIN%%WHERE%%ORDER%%LIMIT%",
 		MaxSql:"SELECT MAX(%FIELD%) as zusux_max FROM %TABLE% %WHERE%",
@@ -107,6 +108,7 @@ type zdb struct {
 type sqlTmp struct {
 	SelectSql string
 	InsertSql string
+	InsertAllSql string
 	UpdateSql string
 	DeleteSql string
 	MaxSql string
@@ -443,9 +445,53 @@ func (db *zdb) Insert (data map[string]interface{},replace bool) (int64,error) {
 	}
 	return id,nil
 }
+
+
+//执行插入语句
+func (db *zdb) InsertAll (data []map[string]interface{},replace bool) (int64,error) {
+	sqlStr, binds := db.BuildInsertAllSql(data,replace)
+	if db.Build.Debug_ {
+		db.showDebug(sqlStr,binds)
+	}
+	db.Build.Reset()
+	stmt, err := db.Conn.SqlDb.Prepare(sqlStr)
+	if err != nil {
+		return 0, err
+	}
+	res, err := stmt.Exec(binds...)
+	if err != nil{
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil{
+		return 0, err
+	}
+	return id,nil
+}
+
+//构建插入语句多条记录批量插入
+func (db *zdb) BuildInsertAllSql(data []map[string]interface{}, replace bool) (sql string, values []interface{}) {
+	keys,holders,values  := db.array_map_keys_values(data)
+	var typeWords string
+	if replace{
+		typeWords = "REPLACE"
+	}else{
+		typeWords = "INSERT"
+	}
+	//%INSERT% INTO %TABLE% (%FIELD%) VALUES %DATA%
+	replacer := strings.NewReplacer(
+		"%INSERT%",typeWords,
+		"%TABLE%",db.Build.Table_ + db.Build.Alias_,
+		"%FIELD%",strings.Join(keys,","),
+		"%DATA%",strings.Join(holders,","),
+	)
+	sql  = replacer.Replace(db.Tmp.InsertAllSql)
+	return
+}
+
 //构建插入语句
 func (db *zdb) BuildInsertSql(data map[string]interface{}, replace bool) (sql string, values []interface{}) {
-	keys,holders,values  := db.array_keys_values(data)
+	keys,holders,values  := db.map_keys_values(data)
 
 	var typeWords string
 	if replace{
@@ -464,7 +510,7 @@ func (db *zdb) BuildInsertSql(data map[string]interface{}, replace bool) (sql st
 	return
 }
 
-func (db *zdb) array_keys_values (data map[string]interface{}) ([]string, []string, []interface{}) {
+func (db *zdb) map_keys_values (data map[string]interface{}) ([]string, []string, []interface{}) {
 	keys := make([]string, 0, len(data))
 	holders := make([]string,0,len(data))
 	values := make([]interface{}, 0, len(data))
@@ -475,6 +521,36 @@ func (db *zdb) array_keys_values (data map[string]interface{}) ([]string, []stri
 	}
 	return keys,holders,values
 }
+
+func (db *zdb) array_map_keys_values (data []map[string]interface{}) ([]string, []string, []interface{}) {
+	keys := make([]string, 0, len(data))
+	holdersArr := make([]string, 0, len(data))
+	values := make([]interface{}, 0, len(data))
+	for index,item := range data {
+
+		holders := make([]string,0,len(item))
+		if index == 0{
+			for k,v := range item{
+				keys = append(keys, k)
+				holders = append(holders,"?")
+				values = append(values, v)
+			}
+		}else{
+			for _,field := range keys{
+				holders = append(holders,"?")
+				if v, ok := item[field]; ok {
+					values = append(values, v)
+				}else {
+					values = append(values, "")
+				}
+			}
+		}
+		holderString := strings.Join(holders,",")
+		holdersArr = append(holdersArr,"("+holderString+")")
+	}
+	return keys,holdersArr,values
+}
+
 
 func (db *zdb) showDebug(sql string, bings []interface{}){
 	fmt.Println("[sql]"+sql+"  [binds]"+fmt.Sprintf("%v",bings))
