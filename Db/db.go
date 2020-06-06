@@ -647,6 +647,50 @@ func (db *zdb) Select() (*[]map[string]string,error) {
 }
 
 
+//获取一列
+//执行查询语句
+func (db *zdb) Column(field string) (*[]string,error) {
+	ret := make([]string,0)
+	sqlStr, binds := db.Field([]string{field}).BuildSelectSql()
+	if db.Build.Debug_ {
+		db.showDebug(sqlStr,binds)
+	}
+	db.Build.Reset()
+	stmt, err := db.Conn.SqlDb.Prepare(sqlStr)
+	if err != nil {
+		return &ret,err
+	}
+	rows, err := stmt.Query(binds...)
+	if err != nil{
+		return  &ret,err
+	}
+	columns,err := rows.Columns()
+	if err != nil{
+		return  &ret,err
+	}
+	values := make([]sql.RawBytes,len(columns))
+	scanArgs := make([]interface{},len(values))
+	for i := range values{
+		scanArgs[i] = &values[i]
+	}
+	for rows.Next(){
+		err = rows.Scan(scanArgs...)
+		if err != nil{
+			return  &ret,err
+		}
+		var value string
+		for _,col := range values{
+			if col == nil{
+				value = ""
+			}else{
+				value = string(col)
+			}
+			ret = append(ret,value)
+		}
+	}
+	return &ret,nil
+}
+
 //执行查询find语句
 func (db *zdb) Find() (*map[string]string,error) {
 	ret := map[string]string{}
